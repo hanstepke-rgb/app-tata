@@ -91,7 +91,10 @@ def cashout():
 
 @app.route('/')
 def index():
-    return send_from_directory(app.static_folder, 'admin.html')
+    # Esto le dice a Flask que busque el archivo index.html en la carpeta 'app'
+    # sin importar dónde esté el servidor ejecutándose
+    return send_from_directory('app', 'index.html')
+    
 
 # Render ignorará esto, pero es útil para pruebas locales
 if __name__ == '__main__':
