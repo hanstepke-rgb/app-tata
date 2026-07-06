@@ -1,15 +1,22 @@
+import os
+import json
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-app = Flask(__name__, static_folder=r"C:\Tata\app")
+# 1. Ajuste de la ruta estática para que funcione en cualquier sistema
+app = Flask(__name__, static_folder='app')
 CORS(app)
 
-# Configuración de Google Sheets
+# 2. Configuración de Google Sheets usando variables de entorno
 ID_HOJA = "1JlMh7lDpWuJekzi40QnnVCtFQMndEmS6s03a3u1WXMg"
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-CREDS = ServiceAccountCredentials.from_json_keyfile_name("credenciales.json", SCOPE)
+
+# Carga el JSON desde la variable de entorno que configurarás en Render
+creds_dict = json.loads(os.environ['GOOGLE_CREDS'])
+CREDS = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPE)
+
 CLIENT = gspread.authorize(CREDS)
 SHEET = CLIENT.open_by_key(ID_HOJA)
 
@@ -23,7 +30,7 @@ def verificar():
     try:
         ws_user = SHEET.worksheet("Usuarios")
         valores = ws_user.get_all_values()
-        for row in valores[1:]: # Saltar cabecera
+        for row in valores[1:]:
             if normalizar(row[0]).lower() == "admin" and normalizar(row[2]) == clave_ingresada:
                 return jsonify({"status": "ok"})
         return jsonify({"status": "error"}), 401
@@ -86,5 +93,6 @@ def cashout():
 def index():
     return send_from_directory(app.static_folder, 'admin.html')
 
+# Render ignorará esto, pero es útil para pruebas locales
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=9001, debug=True)
+    app.run(host='0.0.0.0', port=9001)
