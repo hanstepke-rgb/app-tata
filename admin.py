@@ -5,15 +5,15 @@ from flask_cors import CORS
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# 1. Ajuste de la ruta estática para que funcione en cualquier sistema
+# Definimos que la carpeta de archivos estáticos (HTML/CSS/JS) es 'app'
 app = Flask(__name__, static_folder='app')
 CORS(app)
 
-# 2. Configuración de Google Sheets usando variables de entorno
+# Configuración de Google Sheets
 ID_HOJA = "1JlMh7lDpWuJekzi40QnnVCtFQMndEmS6s03a3u1WXMg"
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-# Carga el JSON desde la variable de entorno que configurarás en Render
+# Carga las credenciales desde la variable de entorno de Render
 creds_dict = json.loads(os.environ['GOOGLE_CREDS'])
 CREDS = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPE)
 
@@ -22,6 +22,8 @@ SHEET = CLIENT.open_by_key(ID_HOJA)
 
 def normalizar(valor):
     return str(valor).strip() if valor is not None else ""
+
+# --- RUTAS DE LA API ---
 
 @app.route('/verificar', methods=['POST'])
 def verificar():
@@ -43,7 +45,7 @@ def datos_admin():
     if "Registro" in [ws.title for ws in SHEET.worksheets()]:
         ws_reg = SHEET.worksheet("Registro").get_all_values()
         for row in ws_reg[1:]:
-            if row[1]: 
+            if len(row) > 2 and row[1]: 
                 nombre = normalizar(row[1])
                 monto = int(row[2]) if row[2].isdigit() else 0
                 compras[nombre] = compras.get(nombre, 0) + monto
@@ -53,7 +55,7 @@ def datos_admin():
         ws_co = SHEET.worksheet("CashOut").get_all_values()
         for row in ws_co[1:]:
             nombre = normalizar(row[0])
-            if nombre:
+            if nombre and len(row) > 4:
                 cashouts[nombre] = {"cashout": int(row[3]) if row[3].isdigit() else 0, "saldo": int(row[4]) if row[4].isdigit() else 0}
     return jsonify({"compras": compras, "cashouts": cashouts})
 
@@ -74,28 +76,17 @@ def marcar_entregado():
     ws_reg.update_cell(idx, 5, "Entregado")
     return jsonify({"status": "ok"})
 
-@app.route('/cashout', methods=['POST'])
-def cashout():
-    data = request.json
-    nombre = normalizar(data.get("nombre"))
-    monto_cashout = int(data.get("monto"))
-    ws_reg = SHEET.worksheet("Registro")
-    datos_reg = ws_reg.get_all_values()
-    
-    total_comprado = sum(int(r[2]) for r in datos_reg[1:] if normalizar(r[1]) == nombre)
-    telefono = next((normalizar(r[0]) for r in datos_reg[1:] if normalizar(r[1]) == nombre), "N/A")
-    
-    ws_co = SHEET.worksheet("CashOut")
-    ws_co.append_row([nombre, telefono, total_comprado, monto_cashout, total_comprado - monto_cashout])
-    return jsonify({"status": "ok"})
+# --- RUTA PRINCIPAL ---
 
 @app.route('/')
 def index():
-    # Esto le dice a Flask que busque el archivo index.html en la carpeta 'app'
-    # sin importar dónde esté el servidor ejecutándose
-    return send_from_directory('app', 'index.html')
-    
+    # Busca index.html dentro de la carpeta 'app'
+    return send_from_directory(app.static_folder, 'index.html')
 
-# Render ignorará esto, pero es útil para pruebas locales
+# Permite cargar archivos CSS/JS si están en la carpeta 'app'
+@app.route('/<path:path>')
+def servir_static(path):
+    return send_from_directory(app.static_folder, path)
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=9001)
+    app.run()
