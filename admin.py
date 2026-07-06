@@ -55,8 +55,10 @@ def datos_admin():
         ws_co = SHEET.worksheet("CashOut").get_all_values()
         for row in ws_co[1:]:
             nombre = normalizar(row[0])
-            if nombre and len(row) > 4:
-                cashouts[nombre] = {"cashout": int(row[3]) if row[3].isdigit() else 0, "saldo": int(row[4]) if row[4].isdigit() else 0}
+            if nombre and len(row) > 3:
+                cashouts[nombre] = {
+                    "cashout": int(row[3]) if row[3].isdigit() else 0
+                }
     return jsonify({"compras": compras, "cashouts": cashouts})
 
 @app.route('/pendientes', methods=['GET'])
@@ -71,23 +73,33 @@ def obtener_pendientes():
 
 @app.route('/marcar-entregado', methods=['POST'])
 def marcar_entregado():
-    idx = request.json.get("id")
+    data = request.json
+    idx = int(data.get("id"))
     ws_reg = SHEET.worksheet("Registro")
     ws_reg.update_cell(idx, 5, "Entregado")
+    return jsonify({"status": "ok"})
+
+@app.route('/cashout', methods=['POST'])
+def ejecutar_cashout():
+    data = request.json
+    nombre = data.get("nombre")
+    monto = data.get("monto")
+    
+    ws_co = SHEET.worksheet("CashOut")
+    # Agregamos: Nombre, Teléfono(vacío), Comprado(0), CashOut(monto)
+    # La columna 'Saldo' en Excel debe tener la fórmula para calcularse sola
+    ws_co.append_row([nombre, "", 0, monto])
     return jsonify({"status": "ok"})
 
 # --- RUTA PRINCIPAL ---
 
 @app.route('/')
 def index():
-    # Cambiamos 'index.html' por 'Admin.html' porque ese es el archivo que tienes
     return send_from_directory(app.static_folder, 'Admin.html')
 
-# Permite cargar archivos CSS/JS si están en la carpeta 'app'
 @app.route('/<path:path>')
 def servir_static(path):
     return send_from_directory(app.static_folder, path)
-    
 
 if __name__ == '__main__':
     app.run()
