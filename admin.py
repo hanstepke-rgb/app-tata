@@ -80,8 +80,8 @@ def marcar_entregado():
 
 @app.route('/')
 def index():
-    # Busca index.html dentro de la carpeta 'app'
-    return send_from_directory(app.static_folder, 'index.html')
+    # Esto te dirá en los LOGS de Render qué carpeta está buscando
+    return f"Carpeta estática configurada: {app.static_folder}, Contenido: {os.listdir(app.static_folder)}"
 
 # Permite cargar archivos CSS/JS si están en la carpeta 'app'
 @app.route('/<path:path>')
