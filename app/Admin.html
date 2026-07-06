@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>CLUB TATA - ADMIN</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f4f9; padding: 20px; font-size: 1.2em; }
+        .container { max-width: 700px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; text-align: center; font-size: 2.2em; }
+        #clave { font-size: 1.8em; padding: 20px; width: 90%; margin: 15px 0; border: 3px solid #ccc; border-radius: 10px; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; font-size: 1.3em; }
+        th { background-color: #2c3e50; color: white; padding: 20px; }
+        td { padding: 15px; border-bottom: 2px solid #ddd; text-align: center; }
+        .input-group { margin-top: 35px; padding: 25px; background: #e8f5e9; border-radius: 12px; border: 2px solid #c8e6c9; }
+        .input-group h3 { margin-top: 0; font-size: 1.8em; color: #2e7d32; }
+        select, input { padding: 20px; width: 95%; margin: 10px 0; border: 3px solid #ccc; border-radius: 10px; font-size: 1.5em; }
+        button { width: 100%; padding: 20px; background: #27ae60; color: white; border: none; border-radius: 10px; font-size: 1.5em; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-logout { background: #e74c3c !important; margin-top: 20px; }
+        .btn-pend { background: #f39c12 !important; margin-top: 10px; }
+        .total-row { font-weight: bold; background-color: #ecf0f1 !important; font-size: 1.3em; }
+    </style>
+</head>
+<body>
+    <div class="container" id="login-box">
+        <h1>CLUB TATA - LOGIN</h1>
+        <input type="password" id="clave" placeholder="Ingresa clave">
+        <button onclick="validar()">ENTRAR</button>
+    </div>
+
+    <div class="container" id="datos-box" style="display:none;">
+        <h1>CONTROL CLUB TATA</h1>
+        <table>
+            <thead><tr><th>Jugador</th><th>Compra</th><th>CashOut</th><th>Saldo</th></tr></thead>
+            <tbody id="tabla-body"></tbody>
+        </table>
+        <div class="input-group">
+            <h3>Registrar CashOut</h3>
+            <select id="select-jugador"></select>
+            <input type="number" id="monto-cashout" placeholder="Monto a retirar">
+            <button onclick="ejecutarCashout()">PROCESAR CASH OUT</button>
+            <button class="btn-pend" onclick="mostrarPendientes()">PENDIENTES</button>
+            <button class="btn-logout" onclick="cerrarSesion()">CERRAR SESIÓN</button>
+        </div>
+    </div>
+
+    <div class="container" id="pendientes-box" style="display:none;">
+        <h1>PENDIENTES POR ENTREGAR</h1>
+        <table id="tabla-pendientes">
+            <thead><tr><th>Jugador</th><th>Monto</th><th>Acción</th></tr></thead>
+            <tbody id="body-pendientes"></tbody>
+        </table>
+        <button style="background: #6c757d; margin-top: 20px;" onclick="volverAdmin()">VOLVER</button>
+    </div>
+    
+    <script>
+        const API = "http://192.168.100.3:9001";
+        
+        async function validar() {
+            const clave = document.getElementById('clave').value;
+            const res = await fetch(`${API}/verificar`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ clave: clave }) });
+            if (res.ok) { document.getElementById('login-box').style.display = 'none'; document.getElementById('datos-box').style.display = 'block'; cargarDatos(); } else { alert("Clave incorrecta"); }
+        }
+        function cerrarSesion() { location.reload(); }
+
+        async function cargarDatos() {
+            const res = await fetch(`${API}/datos-admin?t=${Date.now()}`);
+            const data = await res.json();
+            const body = document.getElementById("tabla-body");
+            const select = document.getElementById("select-jugador");
+            body.innerHTML = ""; select.innerHTML = "";
+            let tC=0, tCO=0, tS=0;
+            
+            // Separar listas
+            let todos = Array.from(new Set([...Object.keys(data.compras), ...Object.keys(data.cashouts)]));
+            let activos = todos.filter(u => !data.cashouts[u]);
+            let retirados = todos.filter(u => data.cashouts[u]);
+
+            // Pintar Activos
+            activos.forEach(u => {
+                let c = data.compras[u] || 0;
+                body.innerHTML += `<tr><td>${u}</td><td>$${c}</td><td>$0</td><td style="color:red; font-weight:bold;">$${c}</td></tr>`;
+                select.innerHTML += `<option value="${u}">${u}</option>`;
+                tC += c; tS += c;
+            });
+
+            // Pintar Retirados (Azul + (OUT))
+            retirados.forEach(u => {
+                let c = data.compras[u] || 0;
+                let co = data.cashouts[u].cashout;
+                let s = data.cashouts[u].saldo;
+                body.innerHTML += `<tr>
+                    <td style="color:blue; font-weight:bold;">${u} (OUT)</td>
+                    <td>$${c}</td>
+                    <td style="color:red;">$${co}</td>
+                    <td style="color:black; font-weight:bold;">$${s}</td>
+                </tr>`;
+                tC += c; tCO += co; tS += s;
+            });
+
+            body.innerHTML += `<tr class="total-row"><td>TOTAL</td><td>$${tC}</td><td>$${tCO}</td><td>$${tS}</td></tr>`;
+        }
+
+        async function mostrarPendientes() {
+            const res = await fetch(`${API}/pendientes`);
+            const data = await res.json();
+            if (data.length === 0) { alert("¡No quedan pendientes por entregar!"); return; }
+            document.getElementById('datos-box').style.display = 'none';
+            document.getElementById('pendientes-box').style.display = 'block';
+            renderizarTablaPendientes(data);
+        }
+        function renderizarTablaPendientes(data) {
+            const body = document.getElementById("body-pendientes");
+            body.innerHTML = "";
+            data.forEach(item => {
+                body.innerHTML += `<tr><td>${item.nombre}</td><td>$${item.monto}</td><td><button style="padding:10px; font-size:0.8em;" onclick="marcarEntregado(${item.id})">ENTREGAR</button></td></tr>`;
+            });
+        }
+        async function marcarEntregado(id) {
+            await fetch(`${API}/marcar-entregado`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: id }) });
+            const res = await fetch(`${API}/pendientes`);
+            const data = await res.json();
+            if (data.length > 0) { renderizarTablaPendientes(data); } 
+            else { alert("¡No quedan pendientes por entregar!"); volverAdmin(); }
+        }
+        function volverAdmin() { document.getElementById('pendientes-box').style.display = 'none'; document.getElementById('datos-box').style.display = 'block'; }
+
+        async function ejecutarCashout() {
+            const nombre = document.getElementById("select-jugador").value;
+            const monto = document.getElementById("monto-cashout").value;
+            if(!monto || !nombre) return alert("Selecciona jugador y monto");
+            const res = await fetch(`${API}/cashout`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ nombre: nombre, monto: monto }) });
+            if (res.ok) { alert("CashOut registrado."); document.getElementById("monto-cashout").value = ""; cargarDatos(); }
+        }
+    </script>
+</body>
+</html>
